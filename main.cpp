@@ -34,6 +34,7 @@ struct GameState
     Entity* lander;
     Entity* platform;
     Entity* lava;
+    Entity* background;
 };
 
 enum AppStatus { RUNNING, TERMINATED };
@@ -78,7 +79,7 @@ constexpr float MILLISECONDS_IN_SECOND = 1000.0f;
 GLuint background_texture_id;
 GLuint font_texture_id;
 constexpr char  background_sprite_filepath[] = "assets/background.png",
-                font_sprite_filepath[] = "assets/font.png",
+                font_sprite_filepath[] = "assets/font_sprite.png",
                 lander_sprite_filepath[] = "assets/steve.png",
                 platform_sprite_filepath[] = "assets/grass.png",
                 lava_sprite_filepath[] = "assets/lava.png";
@@ -127,7 +128,7 @@ GLuint load_texture(const char* filepath)
     return textureID;
 }
 
-void draw_text(ShaderProgram* shader_program, GLuint font_texture_id, std::string text,
+void draw_text(ShaderProgram* program, GLuint font_texture_id, std::string text,
     float font_size, float spacing, glm::vec3 position)
 {
     // Scale the size of the fontbank in the UV-plane
@@ -175,22 +176,21 @@ void draw_text(ShaderProgram* shader_program, GLuint font_texture_id, std::strin
     glm::mat4 model_matrix = glm::mat4(1.0f);
     model_matrix = glm::translate(model_matrix, position);
 
-    shader_program->set_model_matrix(model_matrix);
-    glUseProgram(shader_program->get_program_id());
+    program->set_model_matrix(model_matrix);
+    glUseProgram(program->get_program_id());
 
-    glVertexAttribPointer(shader_program->get_position_attribute(), 2, GL_FLOAT, false, 0,
+    glVertexAttribPointer(program->get_position_attribute(), 2, GL_FLOAT, false, 0,
         vertices.data());
-    glEnableVertexAttribArray(shader_program->get_position_attribute());
-
-    glVertexAttribPointer(shader_program->get_tex_coordinate_attribute(), 2, GL_FLOAT,
-        false, 0, texture_coordinates.data());
-    glEnableVertexAttribArray(shader_program->get_tex_coordinate_attribute());
+    glEnableVertexAttribArray(program->get_position_attribute());
+    glVertexAttribPointer(program->get_tex_coordinate_attribute(), 2, GL_FLOAT, false, 0,
+        texture_coordinates.data());
+    glEnableVertexAttribArray(program->get_tex_coordinate_attribute());
 
     glBindTexture(GL_TEXTURE_2D, font_texture_id);
     glDrawArrays(GL_TRIANGLES, 0, (int)(text.size() * 6));
 
-    glDisableVertexAttribArray(shader_program->get_position_attribute());
-    glDisableVertexAttribArray(shader_program->get_tex_coordinate_attribute());
+    glDisableVertexAttribArray(program->get_position_attribute());
+    glDisableVertexAttribArray(program->get_tex_coordinate_attribute());
 }
 
 void draw_object(glm::mat4& object_g_model_matrix, GLuint& object_texture_id)
@@ -243,9 +243,13 @@ void initialise()
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    background_texture_id = load_texture(background_sprite_filepath);
-    g_background_matrix = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 0.0f));
-    g_background_matrix = glm::scale(g_background_matrix, glm::vec3(10.0f, 7.5f, 1.0f));
+	font_texture_id = load_texture(font_sprite_filepath);
+
+	// ————— BACKGROUND ————— //
+	g_game_state.background = new Entity();
+	g_game_state.background->set_texture_id(load_texture(background_sprite_filepath));
+	g_game_state.background->set_position(glm::vec3(0.0f, 0.0f, 0.0f));
+	g_game_state.background->set_scale(glm::vec3(10.0f, 7.5f, 1.0f));
 
     // ————— PLATFORM ————— //
     g_game_state.platform = new Entity[PLATFORM_COUNT];
@@ -266,7 +270,7 @@ void initialise()
     GLuint lava_texture = load_texture(lava_sprite_filepath);
     for (int i = 0; i < LAVA_COUNT; i++) {
         float x = ((rand() % 10) - 5.0f);  // Random x between -5 and 5
-        float y = -3.5f + (rand() % 2) * 0.5f; // Random y, near the bottom
+        float y = -3.5f + (rand() % 3) * 0.5f; // Random y, near the bottom
 
         g_game_state.lava[i].set_texture_id(lava_texture);
         g_game_state.lava[i].set_position(glm::vec3(x, y, 0.0f));
@@ -382,18 +386,17 @@ void update()
 
     g_time_accumulator = delta_time;
 
-    for (int i = 0; i < PLATFORM_COUNT; i++) {
-        if (g_game_state.lander->check_collision(&g_game_state.platform[i]) &&
-            fabs(g_game_state.lander->get_velocity().y) < 0.1f)
+    // Could not do check collision because of clipping prevention, checked bool directly instead
+    for (int i = 0; i < PLATFORM_COUNT; i++) { // Landed on platform, game win
+        if (g_game_state.lander->m_collided_bottom) 
         {
-            // Mission accomplished
             gameOver = true;
 			gameWin = true;
             break;
         }
     }
 
-    for (int i = 0; i < LAVA_COUNT; i++) {
+	for (int i = 0; i < LAVA_COUNT; i++) { // Landed on lava, game lose
         if (g_game_state.lander->check_collision(&g_game_state.lava[i])) 
         {
             gameOver = true;
@@ -418,28 +421,7 @@ void render()
 {
     glClear(GL_COLOR_BUFFER_BIT);
 
-    // Vertices
-    float vertices[] =
-    {
-        -0.5f, -0.5f, 0.5f, -0.5f, 0.5f, 0.5f,  // triangle 1
-        -0.5f, -0.5f, 0.5f, 0.5f, -0.5f, 0.5f   // triangle 2
-    };
-
-    // Textures
-    float texture_coordinates[] =
-    {
-        0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,     // triangle 1
-        0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f,     // triangle 2
-    };
-
-    glVertexAttribPointer(g_shader_program.get_position_attribute(), 2, GL_FLOAT, false, 0, vertices);
-    glEnableVertexAttribArray(g_shader_program.get_position_attribute());
-
-    glVertexAttribPointer(g_shader_program.get_tex_coordinate_attribute(), 2, GL_FLOAT, false, 0, texture_coordinates);
-    glEnableVertexAttribArray(g_shader_program.get_tex_coordinate_attribute());
-
-    // Bind texture
-    draw_object(g_background_matrix, background_texture_id);
+	g_game_state.background->render(&g_shader_program);
 
     // Draw lava
     for (int i = 0; i < LAVA_COUNT; i++) {
@@ -451,37 +433,32 @@ void render()
         g_game_state.platform[i].render(&g_shader_program);
     }
 
-	std::string fuel_message = "Fuel: " + std::to_string(fuel);
-	draw_text(&g_shader_program, font_texture_id, fuel_message, 0.5f, 0.1f, glm::vec3(-5.0f, 4.0f, 0.0f));
+	std::string fuel_message = "Fuel: " + std::to_string(int(fuel));
+	draw_text(&g_shader_program, font_texture_id, fuel_message, 0.3f, 0.01f, glm::vec3(-4.75f, 3.5f, 0.0f));
 
 	if (gameOver)
 	{
-		std::string message = "Game Over!";
+		std::string message;
 		if (gameWin)
 		{
 			message = "Mission Accomplished!";
 		}
 		else if (gameLose)
 		{
-			message = "You've landed in lava!";
+			message = "Mission Failed!";
 		}
-		draw_text(&g_shader_program, font_texture_id, message, 0.5f, 0.1f, glm::vec3(-2.0f, 0.0f, 0.0f));
-		draw_text(&g_shader_program, font_texture_id, "Press R to restart", 0.5f, 0.1f, glm::vec3(-2.0f, -1.0f, 0.0f));
+		draw_text(&g_shader_program, font_texture_id, message, 0.3f, 0.01f, glm::vec3(-2.5f, 1.0f, 0.0f));
+		draw_text(&g_shader_program, font_texture_id, "Press R to restart", 0.3f, 0.01f, glm::vec3(-2.5f, 0.0f, 0.0f));
 	}
 
     // Draw lander
     g_game_state.lander->render(&g_shader_program);
-
-    // We disable two attribute arrays now
-    glDisableVertexAttribArray(g_shader_program.get_position_attribute());
-    glDisableVertexAttribArray(g_shader_program.get_tex_coordinate_attribute());
 
     SDL_GL_SwapWindow(g_display_window);
 }
 
 
 void shutdown() { SDL_Quit(); }
-
 
 int main(int argc, char* argv[])
 {
@@ -490,7 +467,10 @@ int main(int argc, char* argv[])
     while (g_app_status == RUNNING)
     {
         process_input();
-        update();
+        if (!gameOver)
+        {
+			update();
+        }
         render();
     }
 
