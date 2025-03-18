@@ -181,38 +181,15 @@ void Entity::update(float delta_time, Entity* collidable_entities, int collidabl
         }
     }
 
-    m_velocity += m_acceleration * delta_time;
+    if (!m_is_moving_platform)
+    {
+        m_velocity += m_acceleration * delta_time;
+        m_position.y += m_velocity.y * delta_time;
+        m_position.x += m_velocity.x * delta_time;
+    }
 
-    m_position.y += m_velocity.y * delta_time;
-	check_collision_y(collidable_entities, collidable_entity_count);
-
-	m_position.x += m_velocity.x * delta_time;
+    check_collision_y(collidable_entities, collidable_entity_count);
     check_collision_x(collidable_entities, collidable_entity_count);
-
-    //for (int i = 0; i < collidable_entity_count; i++)
-    //{
-    //    Entity* collidable_entity = &collidable_entities[i];
-    //    if (check_collision(collidable_entity))
-    //    {
-    //        float y_distance = fabs(m_position.y - collidable_entity->m_position.y);
-    //        float y_overlap = fabs(y_distance - (m_height / 2.0f) - (collidable_entity->m_height / 2.0f));
-
-    //        // If moving upward, adjust downward
-    //        if (m_velocity.y > 0)
-    //        {
-    //            m_position.y -= y_overlap;
-    //            m_velocity.y = 0;
-    //            m_collided_top = true;
-    //        }
-    //        // If moving downward, adjust upward
-    //        else if (m_velocity.y < 0)
-    //        {
-    //            m_position.y += y_overlap;
-    //            m_velocity.y = 0;
-    //            m_collided_bottom = true;
-    //        }
-    //    }
-    //}
 
     m_model_matrix = glm::mat4(1.0f);
     m_model_matrix = glm::translate(m_model_matrix, m_position);

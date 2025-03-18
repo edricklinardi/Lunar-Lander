@@ -45,7 +45,7 @@ public:
     // ————— PHYSICS ————— //
     bool m_is_active = true;
     bool m_is_flying = true;
-    bool m_landed = false;
+	bool m_is_moving_platform = false;
     bool m_collided_top = false;
     bool m_collided_bottom = false;
     bool m_collided_left = false;
