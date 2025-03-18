@@ -181,12 +181,9 @@ void Entity::update(float delta_time, Entity* collidable_entities, int collidabl
         }
     }
 
-    if (!m_is_moving_platform)
-    {
-        m_velocity += m_acceleration * delta_time;
-        m_position.y += m_velocity.y * delta_time;
-        m_position.x += m_velocity.x * delta_time;
-    }
+    m_velocity += m_acceleration * delta_time;
+    m_position.y += m_velocity.y * delta_time;
+    m_position.x += m_velocity.x * delta_time;
 
     check_collision_y(collidable_entities, collidable_entity_count);
     check_collision_x(collidable_entities, collidable_entity_count);
@@ -215,11 +212,6 @@ void Entity::render(ShaderProgram* program)
     float tex_coords[] = { 0.0,  1.0, 1.0,  1.0, 1.0, 0.0,  0.0,  1.0, 1.0, 0.0,  0.0, 0.0 };
 
     glBindTexture(GL_TEXTURE_2D, m_texture_id);
-
-    if (m_texture_id == 0) {
-        std::cerr << "WARNING: Entity texture ID is 0! Skipping render.\n";
-        return;
-    }
 
     glVertexAttribPointer(program->get_position_attribute(), 2, GL_FLOAT, false, 0, vertices);
     glEnableVertexAttribArray(program->get_position_attribute());

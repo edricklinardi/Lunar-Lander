@@ -75,7 +75,7 @@ ShaderProgram g_shader_program = ShaderProgram();
 constexpr float FIXED_TIMESTEP = 1.0f / 60.0f;
 constexpr float GRAVITY = -0.5f;
 constexpr float MILLISECONDS_IN_SECOND = 1000.0f;
-constexpr float TNT_SPEED = 0.5f;
+constexpr float TNT_SPEED = 1.0f;
 
 // ————— TEXTURES ————— //
 GLuint font_texture_id;
@@ -93,12 +93,14 @@ float g_time_accumulator = 0.0f;
 // ————— MATRICES & VECTORS ————— //
 glm::mat4 g_view_matrix, g_projection_matrix;
 glm::mat4 g_background_matrix;
-glm::vec3 g_initial_lander_position = glm::vec3(0.0f, 3.0f, 0.0f);
+glm::vec3 g_initial_lander_position = glm::vec3(0.0f, 3.25f, 0.0f);
+glm::vec3 g_initial_tnt_position = glm::vec3(0.0f, -1.0f, 0.0f);
 
 // ————— OTHER VARIABLES ————— //
 float fuel = 150.0f;
 bool isRunning = true;
 bool gameOver = false;
+bool gameStart = false;
 bool gameWin = false;
 bool gameLose = false;
 
@@ -256,9 +258,9 @@ void initialise()
     // ————— PLATFORM ————— //
     g_game_state.platform = new Entity[PLATFORM_COUNT];
 	GLuint platform_texture = load_texture(platform_sprite_filepath);
-    for (int i = 0; i < PLATFORM_COUNT; i++) {
-        float x = ((rand() % 10) - 4.5f);  // Random x between -5 and 5
-        float y = -3.0f + (rand() % 3) * 0.5f; // Random y, near the ground
+	for (int i = 0; i < PLATFORM_COUNT; i++) { // Randomly generate platforms
+        float x = ((rand() % 10) - 4.5f);
+        float y = -3.0f + (rand() % 3) * 0.5f;
 
         g_game_state.platform[i].set_texture_id(platform_texture);
         g_game_state.platform[i].set_position(glm::vec3(x, y, 0.0f));
@@ -270,9 +272,9 @@ void initialise()
 	// ————— LAVA ————— //
 	g_game_state.lava = new Entity[LAVA_COUNT];
     GLuint lava_texture = load_texture(lava_sprite_filepath);
-    for (int i = 0; i < LAVA_COUNT; i++) {
-        float x = ((rand() % 10) - 5.0f);  // Random x between -5 and 5
-        float y = -3.5f + (rand() % 3) * 0.5f; // Random y, near the bottom
+	for (int i = 0; i < LAVA_COUNT; i++) { // Randomly generate lava blocks
+        float x = ((rand() % 10) - 5.0f);
+        float y = -3.5f + (rand() % 3) * 0.5f;
 
         g_game_state.lava[i].set_texture_id(lava_texture);
         g_game_state.lava[i].set_position(glm::vec3(x, y, 0.0f));
@@ -284,13 +286,13 @@ void initialise()
 	// ————— TNT (MOVING PLATFORM) ————— //
 	g_game_state.tnt = new Entity();
 	g_game_state.tnt->set_texture_id(load_texture(tnt_sprite_filepath));
-	g_game_state.tnt->set_position(glm::vec3(0.0f, -1.0f, 0.0f));
+	g_game_state.tnt->set_position(g_initial_tnt_position);
 	g_game_state.tnt->set_width(0.5f);
 	g_game_state.tnt->set_height(0.5f);
     g_game_state.tnt->set_scale(glm::vec3(0.5f, 0.5f, 1.0f));
-    g_game_state.tnt->m_is_moving_platform = true;
+	g_game_state.tnt->set_movement(glm::vec3(TNT_SPEED, 0.0f, 0.0f));
 
-	// ————— PLAYER ————— //
+	// ————— LANDER ————— //
 	g_game_state.lander = new Entity();
 	g_game_state.lander->set_texture_id(load_texture(lander_sprite_filepath));
 	g_game_state.lander->set_position(g_initial_lander_position);
@@ -321,16 +323,46 @@ void process_input()
             case SDLK_q:
 				g_app_status = TERMINATED;
                 break;
-            case SDLK_r:
+            case SDLK_SPACE: // Press spacebar to start the game
+				if (!gameStart)
+				{
+					gameStart = true;
+
+                    // Reset timing variables so delta_time doesn't accumulate from before start
+                    g_previous_ticks = (float)SDL_GetTicks() / MILLISECONDS_IN_SECOND;
+                    g_time_accumulator = 0.0f;
+
+                    // Reset Lander when game starts
+                    g_game_state.lander->set_position(g_initial_lander_position);
+                    g_game_state.lander->set_movement(glm::vec3(0.0f, 0.0f, 0.0f));
+                    g_game_state.lander->set_velocity(glm::vec3(0.0f, 0.0f, 0.0f));
+                    g_game_state.lander->set_acceleration(glm::vec3(0.0f, GRAVITY, 0.0f));
+
+					// Reset TNT when game starts
+                    g_game_state.tnt->set_position(glm::vec3(0.0f, -1.0f, 0.0f));
+                    g_game_state.tnt->set_movement(glm::vec3(TNT_SPEED, 0.0f, 0.0f));
+				}
+				break;
+			case SDLK_r: // Press R to restart the game
                 if (gameOver)
                 {
+                    // Reset timing variables so delta_time doesn't accumulate from before start
+                    g_previous_ticks = (float)SDL_GetTicks() / MILLISECONDS_IN_SECOND;
+                    g_time_accumulator = 0.0f;
+
+                    // Reset Lander
                     fuel = 150.0f;
                     gameOver = false;
                     gameWin = false;
                     gameLose = false;
                     g_game_state.lander->set_position(g_initial_lander_position);
+					g_game_state.lander->set_movement(glm::vec3(0.0f, 0.0f, 0.0f));
                     g_game_state.lander->set_velocity(glm::vec3(0.0f, 0.0f, 0.0f));
                     g_game_state.lander->set_acceleration(glm::vec3(0.0f, GRAVITY, 0.0f));
+
+                    // Reset TNT
+                    g_game_state.tnt->set_position(g_initial_tnt_position);
+                    g_game_state.tnt->set_movement(glm::vec3(TNT_SPEED, 0.0f, 0.0f));
                 }
                 break;
             default: break;
@@ -343,25 +375,28 @@ void process_input()
 
     const Uint8* key_state = SDL_GetKeyboardState(NULL);
 
-    // Reset acceleration
-    g_game_state.lander->set_acceleration(glm::vec3(0.0f, GRAVITY, 0.0f));
-
-    if (fuel > 0)  // Movement only allowed if fuel is available
+    if (gameStart)
     {
-        if (key_state[SDL_SCANCODE_A]) 
+        // Reset acceleration
+        g_game_state.lander->set_acceleration(glm::vec3(0.0f, GRAVITY, 0.0f));
+
+        if (fuel > 0)  // Movement only allowed if fuel is available
         {
-            g_game_state.lander->set_acceleration(glm::vec3(-1.5f, g_game_state.lander->get_acceleration().y, 0.0f));
-            fuel -= 0.1f;
-        }
-        if (key_state[SDL_SCANCODE_D]) 
-        {
-            g_game_state.lander->set_acceleration(glm::vec3(1.5f, g_game_state.lander->get_acceleration().y, 0.0f));
-            fuel -= 0.1f;
-        }
-        if (key_state[SDL_SCANCODE_W]) 
-        {
-            g_game_state.lander->set_acceleration(glm::vec3(g_game_state.lander->get_acceleration().x, 1.5f, 0.0f));
-            fuel -= 0.1f;
+            if (key_state[SDL_SCANCODE_A])
+            {
+                g_game_state.lander->set_acceleration(glm::vec3(-1.5f, g_game_state.lander->get_acceleration().y, 0.0f));
+                fuel -= 0.1f;
+            }
+            if (key_state[SDL_SCANCODE_D])
+            {
+                g_game_state.lander->set_acceleration(glm::vec3(1.5f, g_game_state.lander->get_acceleration().y, 0.0f));
+                fuel -= 0.1f;
+            }
+            if (key_state[SDL_SCANCODE_W])
+            {
+                g_game_state.lander->set_acceleration(glm::vec3(g_game_state.lander->get_acceleration().x, 1.5f, 0.0f));
+                fuel -= 0.1f;
+            }
         }
     }
 
@@ -374,6 +409,11 @@ void process_input()
 
 void update()
 {
+	if(!gameStart) // Game doesn't start until spacebar is pressed
+	{
+		return;
+	}
+
     // ————— DELTA TIME ————— //
     float ticks = (float)SDL_GetTicks() / MILLISECONDS_IN_SECOND;
     float delta_time = ticks - g_previous_ticks;
@@ -392,29 +432,41 @@ void update()
     {
         g_game_state.lander->update(FIXED_TIMESTEP, g_game_state.platform, PLATFORM_COUNT);
 
-        g_game_state.tnt->update(FIXED_TIMESTEP, NULL, 0);
+		if (gameStart)
+		{
+            g_game_state.tnt->update(FIXED_TIMESTEP, NULL, 0);
 
-        // Reverse direction if TNT reaches screen bounds
-        if (g_game_state.tnt->get_position().x > 3.0f)
-        {
-			g_game_state.tnt->set_movement(glm::vec3(-1.0f, 0.0f, 0.0f));
-        }
-        else if (g_game_state.tnt->get_position().x < -3.0f)
-        {
-            g_game_state.tnt->set_movement(glm::vec3(1.0f, 0.0f, 0.0f));
-        }
+            float tnt_position_x = g_game_state.tnt->get_position().x;
+            float tnt_movement_x = g_game_state.tnt->get_movement().x;
 
-        // Apply movement
-		g_game_state.tnt->set_position(
-            glm::vec3(g_game_state.tnt->get_position().x + g_game_state.tnt->get_movement().x, // Update TNT position
-			g_game_state.tnt->get_position().y, 0.0f));
+            // Reverse direction if TNT reaches screen bounds
+            if (tnt_position_x >= 3.0f || tnt_position_x <= -3.0f)
+            {
+                tnt_movement_x *= -1.0f;
+                g_game_state.tnt->set_movement(glm::vec3(tnt_movement_x, 0.0f, 0.0f));
+            }
+
+            g_game_state.tnt->set_position(
+                    glm::vec3(tnt_position_x + tnt_movement_x * TNT_SPEED * FIXED_TIMESTEP,
+                    g_game_state.tnt->get_position().y,
+                    0.0f));
+		}
 
         delta_time -= FIXED_TIMESTEP;
     }
 
     g_time_accumulator = delta_time;
 
-    // Could not do check collision because of clipping prevention, checked bool directly instead
+	// Player loses if the lander goes out of screen and runs out of fuel
+    if ((g_game_state.lander->get_position().y < -4.5f ||
+        g_game_state.lander->get_position().x > 5.0f ||
+        g_game_state.lander->get_position().x < -5.0f) && fuel <= 0)
+    {
+        gameOver = true;
+        gameLose = true;
+    }
+
+    // Couldn't do check collision because of clipping prevention, checked bool directly instead
     for (int i = 0; i < PLATFORM_COUNT; i++) // Landed on platform, game win
     { 
         if (g_game_state.lander->m_collided_bottom) 
@@ -452,7 +504,6 @@ void update()
     {
         g_game_state.lava[i].update(delta_time, NULL, 0);
     }
-
 }
 
 void render()
@@ -482,6 +533,11 @@ void render()
 	std::string fuel_message = "Fuel: " + std::to_string(int(fuel));
 	draw_text(&g_shader_program, font_texture_id, fuel_message, 0.3f, 0.01f, glm::vec3(-4.75f, 3.5f, 0.0f));
 
+	if (!gameStart)
+	{
+		draw_text(&g_shader_program, font_texture_id, "Press SPACE to start", 0.3f, 0.01f, glm::vec3(-2.5f, 1.0f, 0.0f));
+	}
+
 	if (gameOver)
 	{
 		std::string message;
@@ -496,8 +552,6 @@ void render()
 		draw_text(&g_shader_program, font_texture_id, message, 0.3f, 0.01f, glm::vec3(-2.5f, 1.0f, 0.0f));
 		draw_text(&g_shader_program, font_texture_id, "Press R to restart", 0.3f, 0.01f, glm::vec3(-2.5f, 0.0f, 0.0f));
 	}
-
-
 
     SDL_GL_SwapWindow(g_display_window);
 }

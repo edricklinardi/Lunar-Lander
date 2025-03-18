@@ -45,7 +45,6 @@ public:
     // ————— PHYSICS ————— //
     bool m_is_active = true;
     bool m_is_flying = true;
-	bool m_is_moving_platform = false;
     bool m_collided_top = false;
     bool m_collided_bottom = false;
     bool m_collided_left = false;
@@ -63,10 +62,10 @@ public:
     void const check_collision_y(Entity* collidable_entities, int collidable_entity_count);
     void const check_collision_x(Entity* collidable_entities, int collidable_entity_count);
 
-    void move_left() { m_movement.x = -1.0f; };
-    void move_right() { m_movement.x = 1.0f; };
-    void move_up() { m_movement.y = 1.0f; };
-    void move_down() { m_movement.y = -1.0f; };
+    void move_left()    { m_movement.x = -1.0f; };
+    void move_right()   { m_movement.x = 1.0f; };
+    void move_up()      { m_movement.y = 1.0f; };
+    void move_down()    { m_movement.y = -1.0f; };
 
     // ————— GETTERS ————— //
 	glm::vec3 const get_scale()         const { return m_scale; }
@@ -91,5 +90,4 @@ public:
     void const set_height(float new_height)                     { m_height = new_height; }
     void const set_texture_id(GLuint new_texture_id)            { m_texture_id = new_texture_id; }
     EntityType const set_entity_type(EntityType new_entity_type){ m_entity_type = new_entity_type; }
-
 };
